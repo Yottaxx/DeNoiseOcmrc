@@ -40,8 +40,6 @@ class DataCollatorForSeq2SeqEntailment(DataCollatorForSeq2Seq):
         if return_tensors is None:
             return_tensors = self.return_tensors
 
-
-
         num_flatten = len(features[0]["input_ids"])
 
         flattened_features = [
@@ -137,7 +135,8 @@ class DataCollatorForSeq2SeqEntailment(DataCollatorForSeq2Seq):
         )
 
         # prepare decoder_input_ids
-        features["labels"] = features["labels"].masked_select((features["positive"]==1).unsqueeze(dim=-1)).reshape(int(features["positive"].shape[0]/5),-1)
+        features["labels"] = features["labels"].masked_select((features["positive"] == 1).unsqueeze(dim=-1)).reshape(
+            int(features["positive"].shape[0] / 5), -1)
         if self.model is not None and hasattr(self.model, "prepare_decoder_input_ids_from_labels"):
             decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=features["labels"])
             features["decoder_input_ids"] = decoder_input_ids
@@ -146,7 +145,7 @@ class DataCollatorForSeq2SeqEntailment(DataCollatorForSeq2Seq):
             features['rule_mask'] = (features['entailment_label'] != -100)
             features['entailment_len'] = (torch.tensor(entailment_len))
         features['edu_attention_mask'] = (torch.tensor(edu_entailments_attention_mask))
+        features["input_ids"] = features["input_ids"].view(-1, 5, features["input_ids"].shape[-1])
+        features["attention_mask"] = features["attention_mask"].view(-1, 5, features["attention_mask"].shape[-1])
 
         return features
-
-

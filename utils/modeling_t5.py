@@ -891,7 +891,16 @@ class T5Stack(T5PreTrainedModel):
         if self.model_parallel:
             torch.cuda.set_device(self.first_device)
             self.embed_tokens = self.embed_tokens.to(self.first_device)
+        if not self.is_decoder :
+            if len(input_ids.shape) >= 3:
+                input_ids = input_ids.reshape(-1, input_ids.shape[-1])
+            if len(attention_mask.shape) >= 3:
+                attention_mask = attention_mask.reshape(-1, attention_mask.shape[-1])
+
         if self.is_decoder:
+            if len(encoder_hidden_states.shape) >= 4:
+                encoder_hidden_states = encoder_hidden_states.reshape(encoder_hidden_states.shape[0], -1,
+                                                                  encoder_hidden_states.shape[-1])
             encoder_attention_mask = encoder_attention_mask.reshape(encoder_hidden_states.shape[0], -1)
 
         use_cache = use_cache if use_cache is not None else self.config.use_cache
@@ -1079,8 +1088,10 @@ class T5Stack(T5PreTrainedModel):
                 if v is not None
             )
 
+        # if not self.is_decoder:
         if not self.is_decoder:
-            hidden_states = hidden_states.reshape(int(hidden_states.shape[0] / 5), -1, hidden_states.shape[-1])
+            hidden_states = hidden_states.reshape(-1,5,hidden_states.shape[-2],hidden_states.shape[-1])
+
         return BaseModelOutputWithPastAndCrossAttentions(
             last_hidden_state=hidden_states,
             past_key_values=present_key_value_states,
@@ -1702,7 +1713,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             )
 
         hidden_states = encoder_outputs[0]
-        hidden_states_et = hidden_states.clone().reshape(hidden_states.shape[0] * 5, -1, hidden_states.shape[-1])
+        hidden_states_et = hidden_states.reshape(-1, hidden_states.shape[-2], hidden_states.shape[-1])
         score = None
         entailment_score = None
         if entailment_mask is not None and self.entailment_alpha > 0.0:
