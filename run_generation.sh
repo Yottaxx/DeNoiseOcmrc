@@ -1,0 +1,42 @@
+export CUDA_VISIBLE_DEVICES='3,5,6,7'
+python3 -m torch.distributed.launch --nproc_per_node=4 --master_port 29519 conversationalGeneration.py \
+--learning_rate 1e-4 \
+--model_name_or_path 't5-large' \
+--output_dir 'submit-16-information-large-1e-4-et' \
+--num_train_epochs 16 \
+--per_device_train_batch_size 4 \
+--per_device_eval_batch_size 4 \
+--warmup_ratio 0.10 \
+--fp16 false \
+--eval_steps 200 \
+--gradient_accumulation_steps 4 \
+--evaluation_strategy 'steps' \
+--logging_strategy 'steps' \
+--save_strategy 'steps' \
+--save_steps 200 \
+--logging_steps 200 \
+--train_file './data/sharc/edu/information/t5_decision_information_roberta_base_train.json' \
+--validation_file './data/sharc/edu/information/t5_decision_information_roberta_base_dev.json' \
+--test_file './data/sharc/edu/information/t5_decision_information_roberta_base_dev.json' \
+--max_source_length 512 \
+--max_target_length 256 \
+--pad_to_max_length false \
+--source_prefix "Conversational Machine Reading : " \
+--do_train true \
+--do_eval true \
+--do_predict true \
+--ddp_find_unused_parameters true \
+--overwrite_output_dir true \
+--prediction_loss_only false \
+--load_best_model_at_end true \
+--metric_for_best_model 'micro_accuracy'  \
+--predict_with_generate true \
+--greater_is_better true \
+--num_beams 5  \
+--encoder_classifier 1 \
+--loss_entailment 1 \
+--loss_ce 0.0 \
+--decoder_enhance 0 \
+--classify_only  0 \
+--encoder_loss 1 \
+>submit-16-large-1e-4-ac4.log 2>&1
