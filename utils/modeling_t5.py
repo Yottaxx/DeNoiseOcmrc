@@ -1559,7 +1559,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         nn.init.normal_(self.entail_emb)
 
         self.w_selfattn = nn.Linear(config.d_model * 2, 1, bias=True)
-        self.w_output = nn.Linear(config.d_model * 2, 4, bias=True)
+        self.w_output = nn.Linear(config.d_model * 2, 3, bias=True)
 
         decoder_config = copy.deepcopy(config)
         decoder_config.is_decoder = True

@@ -1,3 +1,5 @@
+import random
+
 import torch
 from transformers import DataCollatorForSeq2Seq
 
@@ -35,17 +37,34 @@ class DataCollatorForSeq2SeqEntailment(DataCollatorForSeq2Seq):
             The id to use when padding the labels (-100 will be automatically ignored by PyTorch loss functions).
     """
     encoder_classifier: int = -100
-
+    num_candidates : int = 5
+    collator_shuffle_train : bool= True
     def __call__(self, features, return_tensors=None):
         if return_tensors is None:
             return_tensors = self.return_tensors
 
         num_flatten = len(features[0]["input_ids"])
+        if num_flatten == self.num_candidates:
+            flattened_features = [
+                [{k: v[i] for k, v in feature.items()} for i in range(num_flatten)] for feature in features
+            ]
+            # for i in range(len(flattened_features)):
+            #     random.shuffle(flattened_features[i])
 
-        flattened_features = [
-            [{k: v[i] for k, v in feature.items()} for i in range(num_flatten)] for feature in features
-        ]
-        features = sum(flattened_features, [])
+            features = sum(flattened_features, [])
+        else:
+            flattened_features = [
+                [{k: v[i] for k, v in feature.items()} for i in range(num_flatten)] for feature in features
+            ]
+
+            for i in range(len(flattened_features)):
+                positive = [flattened_features[i][0]]
+                negative = flattened_features[i][1:]
+                random.shuffle(negative)
+                flattened_features[i] = positive + negative[:self.num_candidates-1]
+                if self.collator_shuffle_train:
+                    random.shuffle(flattened_features[i])
+            features = sum(flattened_features, [])
 
         labels = [feature["labels"] for feature in features] if "labels" in features[0].keys() else None
         # We have to pad the labels before calling `tokenizer.pad` as this method won't pad them and needs them of the
@@ -136,7 +155,7 @@ class DataCollatorForSeq2SeqEntailment(DataCollatorForSeq2Seq):
 
         # prepare decoder_input_ids
         features["labels"] = features["labels"].masked_select((features["positive"] == 1).unsqueeze(dim=-1)).reshape(
-            int(features["positive"].shape[0] / 5), -1)
+            int(features["positive"].shape[0] / self.num_candidates), -1)
         if self.model is not None and hasattr(self.model, "prepare_decoder_input_ids_from_labels"):
             decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=features["labels"])
             features["decoder_input_ids"] = decoder_input_ids
@@ -145,7 +164,7 @@ class DataCollatorForSeq2SeqEntailment(DataCollatorForSeq2Seq):
             features['rule_mask'] = (features['entailment_label'] != -100)
             features['entailment_len'] = (torch.tensor(entailment_len))
         features['edu_attention_mask'] = (torch.tensor(edu_entailments_attention_mask))
-        features["input_ids"] = features["input_ids"].view(-1, 5, features["input_ids"].shape[-1])
-        features["attention_mask"] = features["attention_mask"].view(-1, 5, features["attention_mask"].shape[-1])
+        features["input_ids"] = features["input_ids"].view(-1, self.num_candidates, features["input_ids"].shape[-1])
+        features["attention_mask"] = features["attention_mask"].view(-1, self.num_candidates, features["attention_mask"].shape[-1])
 
         return features

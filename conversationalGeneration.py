@@ -122,6 +122,13 @@ class ModelArguments:
                     "with private models)."
         },
     )
+    collator_shuffle_train: bool = field(
+        default=True,
+        metadata={
+            "help": "Will use the token generated when running `transformers-cli login` (necessary to use this script "
+                    "with private models)."
+        },
+    )
 
 
 @dataclass
@@ -456,7 +463,7 @@ def main():
     # edu version
     # target -> edu answer / final answer
     entailment_list = ['true', 'unknown', 'false']
-    prediction_list = ['irrelevant', 'yes', 'no']
+    prediction_list = [ 'yes', 'no']
     split_str = 'final: '
 
 
@@ -478,7 +485,109 @@ def main():
 
             if model_args.encoder_loss:
                 if temp_target[-1].split(split_str)[-1] not in prediction_list:
-                    encoder_label.append(3)
+                    encoder_label.append(len(prediction_list))
+                else:
+                    encoder_label.append(prediction_list.index(temp_target[-1].split(split_str)[-1]))
+
+            targets.append(" ".join(temp_target))
+
+        inputs = [prefix + inp for inp in inputs]
+        model_inputs = tokenizer(inputs, max_length=data_args.max_source_length, padding=padding, truncation=True)
+
+        edu_entailments_mask = []
+        edu_entailments_label = []
+        edu_entailment_len = []
+        for i in range(len(model_inputs['input_ids'])):
+
+            edu_entailments_mask_temp = (torch.tensor(model_inputs['input_ids'][i]) == tokenizer.convert_tokens_to_ids(
+                '<edu>'))
+
+            final_entailments_mask_temp = (
+                    torch.tensor(model_inputs['input_ids'][i]) == tokenizer.convert_tokens_to_ids(
+                '<final>'))
+
+            scenario_entailments_mask_temp = (
+                    torch.tensor(model_inputs['input_ids'][i]) == tokenizer.convert_tokens_to_ids(
+                '<scenario>'))
+
+            assert sum(final_entailments_mask_temp).item() == 1, sum(final_entailments_mask_temp).item()
+            assert sum(scenario_entailments_mask_temp).item() <= 1
+
+            question_entailments_mask_temp = (
+                    torch.tensor(model_inputs['input_ids'][i]) == tokenizer.convert_tokens_to_ids(
+                '<question>'))
+
+            assert (
+                               edu_entailments_mask_temp ^ final_entailments_mask_temp ^ question_entailments_mask_temp ^ scenario_entailments_mask_temp).sum().item() == \
+                   sum(edu_entailments_mask_temp).item() + sum(final_entailments_mask_temp).item() + sum(
+                question_entailments_mask_temp).item() + sum(scenario_entailments_mask_temp).item()
+
+            edu_entailments_mask.append(
+                (
+                        edu_entailments_mask_temp + final_entailments_mask_temp + question_entailments_mask_temp + scenario_entailments_mask_temp
+                ).long().tolist()
+            )
+
+            temp_entailments_label = []
+
+            assert sum(edu_entailments_mask_temp).item() == len(examples['target'][i]) - 1
+
+            edu_entailment_len.append(sum(edu_entailments_mask_temp).item())
+
+            for j in range(sum(edu_entailments_mask_temp).item()):
+
+                if examples['positive'][i] == 0:
+                    temp_entailments_label.append(-100)
+                    continue
+
+                if examples['target'][i][j] == '-100':
+                    temp_entailments_label.append(-100)
+                else:
+                    temp_entailments_label.append(
+                        entailment_list.index(
+                            examples['target'][i][j].replace("<edu> yes", "<edu> true").replace("<edu> no",
+                                                                                                "<edu> false").replace(
+                                '<edu> ', '').strip()))
+
+            assert len(temp_entailments_label) == sum(edu_entailments_mask_temp).item()
+            edu_entailments_label.append(temp_entailments_label)
+
+        # Setup the tokenizer for targets
+        with tokenizer.as_target_tokenizer():
+            labels = tokenizer(targets, max_length=max_target_length, padding=padding, truncation=True)
+
+        # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
+        # padding in the loss.
+        if padding == "max_length" and data_args.ignore_pad_token_for_loss:
+            labels["input_ids"] = [
+                [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
+            ]
+        model_inputs["positive"] = examples["positive"]
+        model_inputs["labels"] = labels["input_ids"]
+        model_inputs["entailment_mask"] = edu_entailments_mask
+        model_inputs['entailment_label'] = edu_entailments_label
+        model_inputs['encoder_label'] = encoder_label
+        model_inputs['entailment_len'] = edu_entailment_len
+
+        return {k: [v[i : i + 50] for i in range(0, len(v), 50)] for k, v in model_inputs.items()}
+    def preprocess_function_eval(examples):
+
+        inputs = examples['input']
+        targets = []
+        encoder_label = []
+        for i in range(len(examples['target'])):
+            temp_target = []
+
+            temp_target.append(examples['target'][i][-1].replace('<edu>', '').replace('<final> ', 'final: ').strip())
+
+
+            if model_args.classify_only:
+                if temp_target[-1].split(split_str)[-1] not in prediction_list:
+                    temp_target[-1] = split_str+'inquire'
+
+            if model_args.encoder_loss:
+                if temp_target[-1].split(split_str)[-1] not in prediction_list:
+                    encoder_label.append(len(prediction_list))
                 else:
                     encoder_label.append(prediction_list.index(temp_target[-1].split(split_str)[-1]))
 
@@ -563,7 +672,6 @@ def main():
         model_inputs['entailment_len'] = edu_entailment_len
 
         return {k: [v[i : i + 5] for i in range(0, len(v), 5)] for k, v in model_inputs.items()}
-
     #
     # def preprocess_function(examples):
     #
@@ -631,7 +739,7 @@ def main():
             eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
         with training_args.main_process_first(desc="validation dataset map pre-processing"):
             eval_dataset = eval_dataset.map(
-                preprocess_function,
+                preprocess_function_eval,
                 batched=True,
                 num_proc=data_args.preprocessing_num_workers,
                 remove_columns=column_names,
@@ -648,7 +756,7 @@ def main():
             predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
         with training_args.main_process_first(desc="prediction dataset map pre-processing"):
             predict_dataset = predict_dataset.map(
-                preprocess_function,
+                preprocess_function_eval,
                 batched=True,
                 num_proc=data_args.preprocessing_num_workers,
                 remove_columns=column_names,
@@ -665,7 +773,7 @@ def main():
         pad_to_multiple_of=8 if training_args.fp16 else None,
     )
     data_collator.encoder_classifier = model_args.encoder_classifier
-
+    data_collator.collator_shuffle_train = model_args.collator_shuffle_train
     # Metric
     metric = CombinedEvaluator()
 
