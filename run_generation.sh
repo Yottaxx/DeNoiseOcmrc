@@ -1,23 +1,23 @@
-export CUDA_VISIBLE_DEVICES='3,5,6,7'
-python3 -m torch.distributed.launch --nproc_per_node=4 --master_port 29519 conversationalGeneration.py \
---learning_rate 1e-4 \
---model_name_or_path 't5-large' \
---output_dir 'submit-16-information-large-1e-4-et' \
---num_train_epochs 16 \
---per_device_train_batch_size 4 \
---per_device_eval_batch_size 4 \
+export CUDA_VISIBLE_DEVICES='0,1,2,3,4,5,6,7'
+nohup python3 -m torch.distributed.launch --nproc_per_node=8 --master_port 29519 conversationalGeneration.py \
+--learning_rate 2e-4 \
+--model_name_or_path 't5-base' \
+--output_dir 'multisetUnseen2e4ET564Ep8B' \
+--num_train_epochs 64 \
+--per_device_train_batch_size 8 \
+--per_device_eval_batch_size 8 \
 --warmup_ratio 0.10 \
 --fp16 false \
 --eval_steps 200 \
---gradient_accumulation_steps 4 \
+--gradient_accumulation_steps 1 \
 --evaluation_strategy 'steps' \
 --logging_strategy 'steps' \
 --save_strategy 'steps' \
 --save_steps 200 \
 --logging_steps 200 \
---train_file './data/sharc/edu/information/t5_decision_information_roberta_base_train.json' \
---validation_file './data/sharc/edu/information/t5_decision_information_roberta_base_dev.json' \
---test_file './data/sharc/edu/information/t5_decision_information_roberta_base_dev.json' \
+--train_file './data/multisetUnseen/t5_decision_information_roberta_base_train_all_snipped_id.json' \
+--validation_file './data/multisetUnseen/t5_decision_information_roberta_base_dev_all_snipped_id.json' \
+--test_file './data/multisetUnseen/t5_decision_information_roberta_base_test_all_snipped_id.json' \
 --max_source_length 512 \
 --max_target_length 256 \
 --pad_to_max_length false \
@@ -32,11 +32,100 @@ python3 -m torch.distributed.launch --nproc_per_node=4 --master_port 29519 conve
 --metric_for_best_model 'micro_accuracy'  \
 --predict_with_generate true \
 --greater_is_better true \
---num_beams 5  \
+--num_beams 10  \
 --encoder_classifier 1 \
---loss_entailment 1 \
+--loss_entailment 0.5 \
 --loss_ce 0.0 \
 --decoder_enhance 0 \
 --classify_only  0 \
 --encoder_loss 1 \
->submit-16-large-1e-4-ac4.log 2>&1
+> multisetUnseen2e4ET564Ep8B.log 2>&1 &
+
+
+--resume_from_checkpoint "./large-2e-4-base-multi-et08-randomPick/checkpoint-9200" \
+
+nohup python3 -m torch.distributed.launch --nproc_per_node=8 --master_port 29519 conversationalGeneration.py \
+--learning_rate 2e-4 \
+--model_name_or_path './large-2e-4-base-multi-et1/checkpoint-9200' \
+--output_dir 'large-2e-4-base-multi-et1' \
+--num_train_epochs 64 \
+--per_device_train_batch_size 8 \
+--per_device_eval_batch_size 8 \
+--warmup_ratio 0.10 \
+--fp16 false \
+--eval_steps 200 \
+--gradient_accumulation_steps 1 \
+--evaluation_strategy 'steps' \
+--logging_strategy 'steps' \
+--save_strategy 'steps' \
+--save_steps 200 \
+--logging_steps 200 \
+--train_file './data/t5_decision_information_roberta_base_train_all_snipped_id.json' \
+--validation_file './data/t5_decision_information_roberta_base_dev_all_snipped_id.json' \
+--test_file './data/t5_decision_information_roberta_base_test_all_snipped_id.json' \
+--max_source_length 512 \
+--max_target_length 256 \
+--pad_to_max_length false \
+--source_prefix "Conversational Machine Reading : " \
+--do_train false \
+--do_eval true \
+--do_predict true \
+--ddp_find_unused_parameters true \
+--overwrite_output_dir true \
+--prediction_loss_only false \
+--load_best_model_at_end true \
+--metric_for_best_model 'micro_accuracy'  \
+--predict_with_generate true \
+--greater_is_better true \
+--num_beams 10  \
+--encoder_classifier 1 \
+--loss_entailment 08 \
+--loss_ce 0.0 \
+--decoder_enhance 0 \
+--classify_only  0 \
+--encoder_loss 1 \
+> eval.log 2>&1 &
+
+
+export CUDA_VISIBLE_DEVICES='0,1,2,3,4,5,6,7'
+nohup python3 -m torch.distributed.launch --nproc_per_node=8 --master_port 29519 conversationalGeneration.py \
+--learning_rate 2e-4 \
+--model_name_or_path 't5-base' \
+--output_dir 'nqUnseen2e4ET564Ep8B' \
+--num_train_epochs 64 \
+--per_device_train_batch_size 8 \
+--per_device_eval_batch_size 8 \
+--warmup_ratio 0.10 \
+--fp16 false \
+--eval_steps 200 \
+--gradient_accumulation_steps 1 \
+--evaluation_strategy 'steps' \
+--logging_strategy 'steps' \
+--save_strategy 'steps' \
+--save_steps 200 \
+--logging_steps 200 \
+--train_file './data/nqUnseen/t5_decision_information_roberta_base_train_all_snipped_id.json' \
+--validation_file './data/nqUnseen/t5_decision_information_roberta_base_dev_all_snipped_id.json' \
+--test_file './data/nqUnseen/t5_decision_information_roberta_base_test_all_snipped_id.json' \
+--max_source_length 512 \
+--max_target_length 256 \
+--pad_to_max_length false \
+--source_prefix "Conversational Machine Reading : " \
+--do_train true \
+--do_eval true \
+--do_predict true \
+--ddp_find_unused_parameters true \
+--overwrite_output_dir true \
+--prediction_loss_only false \
+--load_best_model_at_end true \
+--metric_for_best_model 'micro_accuracy'  \
+--predict_with_generate true \
+--greater_is_better true \
+--num_beams 10  \
+--encoder_classifier 1 \
+--loss_entailment 0.5 \
+--loss_ce 0.0 \
+--decoder_enhance 0 \
+--classify_only  0 \
+--encoder_loss 1 \
+> nqUnseen2e4ET564Ep8B.log 2>&1 &

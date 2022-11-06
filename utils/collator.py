@@ -37,8 +37,10 @@ class DataCollatorForSeq2SeqEntailment(DataCollatorForSeq2Seq):
             The id to use when padding the labels (-100 will be automatically ignored by PyTorch loss functions).
     """
     encoder_classifier: int = -100
-    num_candidates : int = 5
+    num_candidates : int = 1
+    # fix 1-5
     collator_shuffle_train : bool= True
+    rule_candidates_bucket : int = 50
     def __call__(self, features, return_tensors=None):
         if return_tensors is None:
             return_tensors = self.return_tensors
@@ -58,12 +60,19 @@ class DataCollatorForSeq2SeqEntailment(DataCollatorForSeq2Seq):
             ]
 
             for i in range(len(flattened_features)):
+                flattened_features[i] = flattened_features[i][:self.rule_candidates_bucket]
+                # print(len(flattened_features[i]))
                 positive = [flattened_features[i][0]]
                 negative = flattened_features[i][1:]
-                random.shuffle(negative)
+                # random.shuffle(negative)
                 flattened_features[i] = positive + negative[:self.num_candidates-1]
-                if self.collator_shuffle_train:
-                    random.shuffle(flattened_features[i])
+                if self.num_candidates>1:
+                    assert positive[0]["positive"] == 1,"no positive"
+                else:
+                    flattened_features[i][0]["positive"] = 1
+
+                # if self.collator_shuffle_train:
+                #     random.shuffle(flattened_features[i])
             features = sum(flattened_features, [])
 
         labels = [feature["labels"] for feature in features] if "labels" in features[0].keys() else None
@@ -108,20 +117,31 @@ class DataCollatorForSeq2SeqEntailment(DataCollatorForSeq2Seq):
 
                     sum_temp_before = sum(feature["entailment_mask"])
 
-                    len_stay = len(feature["entailment_mask"]) - len(remainder)
+                    len_stay = max(len(feature["entailment_mask"]) - len(remainder),0)
                     feature["entailment_mask"] = (
                             feature["entailment_mask"][:len_stay] + remainder
                     )
                     sum_temp = sum(feature["entailment_mask"])
 
+                    # fix length for neg
+                    if feature["positive"] == 0:
+                        for i in range(0,max(max_e_mask_sum-sum_temp,0)):
+                            feature["entailment_mask"][i] = 1
+                        
+                        sum_temp = sum(feature["entailment_mask"])
                     attention_mask_temp = [False] * sum_temp_before + [True] * len(remainder)
 
-                    assert len(attention_mask_temp) == sum_temp
-                    assert sum(attention_mask_temp) == (sum_temp - sum_temp_before)
+                    # out of boundary
+                    # only positive asssert
+                    # if feature["positive"] == 1:
+                    if len(attention_mask_temp) != sum_temp:
+                        print("bug")
+                    assert len(attention_mask_temp) == sum_temp,f"{len_stay},{attention_mask_temp},{sum_temp},{sum_temp_before},{remainder},{sum(feature['entailment_mask'])},{max_e_mask_sum}"
+                    assert sum(attention_mask_temp) == (sum_temp - sum_temp_before),f"{sum(attention_mask_temp)},{sum_temp},{sum_temp_before}"
+                    assert max_e_mask_sum == sum_temp,f"{len_stay},{sum(max_e_mask_sum)},{sum_temp},{sum_temp_before}"
 
                     edu_entailments_attention_mask.append(attention_mask_temp)
 
-                    assert max_e_mask_sum == sum_temp
 
             if entailment_label is not None:
                 max_e_mask_sum = max(entailment_len)

@@ -1090,8 +1090,9 @@ class T5Stack(T5PreTrainedModel):
 
         # if not self.is_decoder:
         if not self.is_decoder:
-            hidden_states = hidden_states.reshape(-1,5,hidden_states.shape[-2],hidden_states.shape[-1])
-
+            hidden_states = hidden_states.reshape(-1,1,hidden_states.shape[-2],hidden_states.shape[-1])
+        # fix 1-5
+        
         return BaseModelOutputWithPastAndCrossAttentions(
             last_hidden_state=hidden_states,
             past_key_values=present_key_value_states,
@@ -1726,6 +1727,10 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             #             hidden_states.shape[0], -1, hidden_states.shape[-1])
             #     )
             # )
+            if hidden_states_et.masked_select(
+                        entailment_mask.unsqueeze(dim=-1).bool()
+                    ).shape[0] % hidden_states_et.shape[0] !=0 :
+                    print("hello")
 
             entailment_hidden = self.transformer_encoder(
                 self.dropout(

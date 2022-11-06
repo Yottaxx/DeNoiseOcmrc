@@ -28,7 +28,7 @@ import datasets
 import nltk  # Here to have a nice missing dependency error message early on
 import numpy as np
 import torch
-from datasets import load_dataset, load_metric
+from datasets import load_dataset, load_from_disk, load_metric
 from sklearn.metrics import accuracy_score, confusion_matrix
 
 import transformers
@@ -49,7 +49,7 @@ from transformers.utils.versions import require_version
 
 from trainer import Seq2SeqEncoderParallelTrainer
 from utils.collator import DataCollatorForSeq2SeqEntailment
-from utils.evaluator import MoreEvaluator, CombinedEvaluator
+from utils.oEvaluator import MoreEvaluator, CombinedEvaluator
 from utils.modeling_t5 import T5ForConditionalGeneration
 
 logger = logging.getLogger(__name__)
@@ -74,6 +74,9 @@ class ModelArguments:
         metadata={"help": "whether need encoder classify "}
     )
 
+
+
+    
     encoder_loss: int = field(
         metadata={"help": "whether need encoder classify "}
     )
@@ -130,6 +133,13 @@ class ModelArguments:
         },
     )
 
+    rule_candidates: Optional[int] = field(
+        default=50,
+        metadata={
+            "help": "The maximum total input sequence length after tokenization. Sequences longer "
+                    "than this will be truncated, sequences shorter will be padded."
+        },
+    )
 
 @dataclass
 class DataTrainingArguments:
@@ -401,10 +411,10 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
     )
 
-    # if not training_args.do_train and model_args.model_name_or_path not in ['t5-base','t5-large']:
-    #     state_Dict = torch.load("{}/pytorch_model.bin".format(model_args.model_name_or_path),
-    #                             map_location=training_args.device)
-    #     model.load_state_dict(state_dict=state_Dict)
+    if not training_args.do_train and model_args.model_name_or_path not in ['t5-base','t5-large']:
+        state_Dict = torch.load("{}/pytorch_model.bin".format(model_args.model_name_or_path),
+                                map_location=training_args.device)
+        model.load_state_dict(state_dict=state_Dict)
 
     print(model)
     # model.encoder.embed_tokens = EntailmentEmbeddings(model.encoder.embed_tokens, config)
@@ -717,18 +727,20 @@ def main():
     if training_args.do_train:
         if "train" not in raw_datasets:
             raise ValueError("--do_train requires a train dataset")
-        train_dataset = raw_datasets["train"]
+        # train_dataset = raw_datasets["train"]
+        train_dataset = load_from_disk("trainData")
         if data_args.max_train_samples is not None:
             train_dataset = train_dataset.select(range(data_args.max_train_samples))
-        with training_args.main_process_first(desc="train dataset map pre-processing"):
-            train_dataset = train_dataset.map(
-                preprocess_function,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                remove_columns=column_names,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on train dataset",
-            )
+        # with training_args.main_process_first(desc="train dataset map pre-processing"):
+        #     train_dataset = train_dataset.map(
+        #         preprocess_function,
+        #         batched=True,
+        #         num_proc=data_args.preprocessing_num_workers,
+        #         remove_columns=column_names,
+        #         load_from_cache_file=not data_args.overwrite_cache,
+        #         desc="Running tokenizer on train dataset",
+        #     )
+        # train_dataset.save_to_disk("trainData")
 
     if training_args.do_eval:
         max_target_length = data_args.val_max_target_length
@@ -763,7 +775,6 @@ def main():
                 load_from_cache_file=not data_args.overwrite_cache,
                 desc="Running tokenizer on prediction dataset",
             )
-
     # Data collator
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     data_collator = DataCollatorForSeq2SeqEntailment(
@@ -774,6 +785,8 @@ def main():
     )
     data_collator.encoder_classifier = model_args.encoder_classifier
     data_collator.collator_shuffle_train = model_args.collator_shuffle_train
+    data_collator.rule_candidates_bucket = model_args.rule_candidates
+
     # Metric
     metric = CombinedEvaluator()
 

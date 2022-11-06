@@ -50,7 +50,7 @@ class MoreEvaluator:
 
 
 class CombinedEvaluator:
-    def __init__(self, labels=['yes', 'no', 'more', 'irrelevant'], accuracy_targets=['yes', 'no', 'irrelevant']):
+    def __init__(self, labels=['yes', 'no', 'more'], accuracy_targets=['yes', 'no']):
         self.labels = labels
         self.accuracy_targets = accuracy_targets
         self.classification_evaluator = ClassificationEvaluator(labels=labels)
@@ -222,11 +222,11 @@ def evaluate(gold_file, prediction_file, mode='follow_ups'):
         results = evaluator.evaluate(ground_truths, predictions)
 
     elif mode == 'classification':
-        evaluator = ClassificationEvaluator(labels=['yes', 'no', 'more', 'irrelevant'])
+        evaluator = ClassificationEvaluator(labels=['yes', 'no', 'more'])
         results = evaluator.evaluate(ground_truths, predictions)
 
     else:
-        evaluator = CombinedEvaluator(labels=['yes', 'no', 'more', 'irrelevant'])
+        evaluator = CombinedEvaluator(labels=['yes', 'no', 'more'])
         results = evaluator.evaluate(ground_truths, predictions)
 
     return results
